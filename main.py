@@ -4,7 +4,7 @@ import os
 import json
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from datetime import datetime
+from datetime import datetime, timedelta
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 import gspread
@@ -52,6 +52,10 @@ def start_dummy_server():
             self.end_headers()
             self.wfile.write(b"OK")
 
+        def do_HEAD(self):  # prevents Render warning noise
+            self.send_response(200)
+            self.end_headers()
+
     server = HTTPServer(("0.0.0.0", port), Handler)
     print(f"Dummy server running on port {port}")
     server.serve_forever()
@@ -60,11 +64,11 @@ def start_dummy_server():
 
 def extract_design_number(filename):
     """
-    Example:
     DES-21748FRC.jpg → 21748
+    STRICT match after DES-
     """
-    match = re.search(r'\d{3,8}', filename)
-    return match.group(0) if match else None
+    match = re.search(r'DES-(\d+)', filename)
+    return match.group(1) if match else None
 
 
 def already_logged(design):
@@ -78,7 +82,9 @@ def already_logged(design):
 
 
 def log_order(design):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    now = ist_time.strftime("%Y-%m-%d %H:%M:%S IST")
+
     sheet.append_row(["UNKNOWN", "QR_ORDER", design, now])
     print(f"✔ WRITTEN → {design}")
 
