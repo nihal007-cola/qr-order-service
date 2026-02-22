@@ -1,5 +1,7 @@
 import time
 import re
+import os
+import json
 from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
@@ -12,7 +14,7 @@ WORKSHEET_NAME = "MESSAGE_MAP"
 
 DRIVE_FOLDER_ID = "1Tfv-0A-thHw7o6nVPtm3HQS4__Ogy4Hw"
 
-POLL_INTERVAL = 2  # seconds (fast but safe)
+POLL_INTERVAL = 2  # seconds
 
 SCOPES = [
     "https://www.googleapis.com/auth/drive",
@@ -21,8 +23,8 @@ SCOPES = [
 
 # ==========================================
 
-creds = Credentials.from_service_account_file(
-    "service_account.json",
+creds = Credentials.from_service_account_info(
+    json.loads(os.environ["GOOGLE_CREDS"]),
     scopes=SCOPES
 )
 
@@ -33,22 +35,14 @@ sheet = gc.open_by_key(SPREADSHEET_ID).worksheet(WORKSHEET_NAME)
 
 processed_files = set()
 
-
 # ================= HELPERS =================
 
 def extract_design_number(filename):
-    """
-    Extract numeric design from QR result or filename
-    Example: DES-21748FRC → 21748
-    """
     match = re.search(r'\d{3,8}', filename)
     return match.group(0) if match else None
 
 
 def already_logged(design):
-    """
-    Prevent duplicate sheet entries
-    """
     records = sheet.get_all_values()
     for row in records:
         if len(row) >= 3 and row[2] == design:
@@ -66,9 +60,8 @@ def delete_file(file_id):
     try:
         drive_service.files().delete(fileId=file_id).execute()
         print("🗑 Deleted from Drive")
-    except:
-        print("⚠ Could not delete file")
-
+    except Exception as e:
+        print("⚠ Could not delete file:", e)
 
 # ================= CORE LOOP =================
 
@@ -113,7 +106,6 @@ def poll_drive():
 
         delete_file(file_id)
 
-
 def run():
 
     print("QR Service Started — polling Drive folder:", DRIVE_FOLDER_ID)
@@ -121,7 +113,6 @@ def run():
     while True:
         poll_drive()
         time.sleep(POLL_INTERVAL)
-
 
 # ================= START =================
 
