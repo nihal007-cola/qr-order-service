@@ -2,13 +2,9 @@ services:
   - type: web
     name: qr-drive-service
     env: python
-    plan: free
-
-    buildCommand: |
-      pip install -r requirements.txt
-
-    startCommand: |
-      python main.py
 
     nativePackages:
       - libzbar0
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
