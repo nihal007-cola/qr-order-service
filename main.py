@@ -2,14 +2,14 @@ import time
 import re
 import os
 import json
-import numpy as np
-import cv2
 
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from io import BytesIO
 
+from PIL import Image
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 from pyzbar.pyzbar import decode
@@ -30,7 +30,7 @@ SCOPES = [
 ]
 
 # ==========================================
-# ✅ SAFE CREDENTIAL LOADING (Render Secret)
+# SAFE CREDENTIAL LOADING (Render Secret)
 # ==========================================
 
 raw_json = os.environ.get("SERVICE_ACCOUNT_JSON")
@@ -71,7 +71,7 @@ def start_dummy_server():
 
     HTTPServer(("0.0.0.0", port), Handler).serve_forever()
 
-# ================= QR DECODING =================
+# ================= QR DECODING (Render-Safe) =================
 
 def extract_design_from_qr(file_id):
 
@@ -79,12 +79,7 @@ def extract_design_from_qr(file_id):
         request = drive_service.files().get_media(fileId=file_id)
         image_bytes = request.execute()
 
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-        if img is None:
-            print("❌ Image decode failed")
-            return None
+        img = Image.open(BytesIO(image_bytes))
 
         decoded = decode(img)
 
