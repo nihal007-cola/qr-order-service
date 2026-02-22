@@ -2,12 +2,19 @@ import time
 import re
 import os
 import json
+import numpy as np
+import cv2
+
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
+from pyzbar.pyzbar import decode
 import gspread
+
 
 # ================= CONFIG =================
 
@@ -23,7 +30,7 @@ SCOPES = [
 ]
 
 # ==========================================
-# ✅ SAFE CREDENTIAL LOADING
+# ✅ SAFE CREDENTIAL LOADING (Render Secret)
 # ==========================================
 
 raw_json = os.environ.get("SERVICE_ACCOUNT_JSON")
@@ -47,7 +54,7 @@ sheet = gc.open_by_key(SPREADSHEET_ID).worksheet(WORKSHEET_NAME)
 
 processed_files = set()
 
-# ================= DUMMY SERVER =================
+# ================= DUMMY SERVER (Render Requirement) =================
 
 def start_dummy_server():
     port = int(os.environ.get("PORT", 10000))
@@ -58,25 +65,57 @@ def start_dummy_server():
             self.end_headers()
             self.wfile.write(b"OK")
 
+        def do_HEAD(self):
+            self.send_response(200)
+            self.end_headers()
+
     HTTPServer(("0.0.0.0", port), Handler).serve_forever()
 
-# ================= HELPERS =================
+# ================= QR DECODING =================
 
-def extract_design_number(filename):
-    match = re.search(r'\d{3,8}', filename)
-    return match.group(0) if match else None
+def extract_design_from_qr(file_id):
 
+    try:
+        request = drive_service.files().get_media(fileId=file_id)
+        image_bytes = request.execute()
+
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if img is None:
+            print("❌ Image decode failed")
+            return None
+
+        decoded = decode(img)
+
+        if not decoded:
+            print("❌ No QR detected")
+            return None
+
+        raw_data = decoded[0].data.decode("utf-8")
+
+        print("QR RAW →", raw_data)
+
+        match = re.search(r'\d{3,8}', raw_data)
+
+        return match.group(0) if match else None
+
+    except Exception as e:
+        print("QR decode error:", e)
+        return None
+
+# ================= SHEET LOGIC =================
 
 def already_logged(design):
     records = sheet.get_all_values()
     return any(len(r) >= 3 and r[2] == design for r in records)
 
-
 def log_order(design):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sheet.append_row(["UNKNOWN", "QR_ORDER", design, now])
-    print(f"✔ WRITTEN → {design}")
+    now_ist = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+    sheet.append_row(["UNKNOWN", "QR_ORDER", design, now_ist])
+    print(f"✔ WRITTEN → {design} (IST)")
 
+# ================= DRIVE CLEANUP =================
 
 def delete_file(file_id):
     try:
@@ -106,19 +145,19 @@ def poll_drive():
 
         print("NEW IMAGE →", name)
 
-        design = extract_design_number(name)
+        design = extract_design_from_qr(file_id)
 
         if not design:
-            print("❌ No design")
+            print("❌ No valid design in QR")
             delete_file(file_id)
             continue
 
         if already_logged(design):
-            print("⚠ Duplicate")
+            print("⚠ Duplicate design")
             delete_file(file_id)
             continue
 
-        print("QR ORDER →", design)
+        print("✅ QR ORDER →", design)
 
         log_order(design)
         delete_file(file_id)
@@ -129,7 +168,7 @@ def run():
 
     Thread(target=start_dummy_server, daemon=True).start()
 
-    print("🚀 QR Service Started — polling:", DRIVE_FOLDER_ID)
+    print("🚀 QR Service Started — polling Drive folder")
 
     while True:
         try:
