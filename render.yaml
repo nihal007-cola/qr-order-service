@@ -2,8 +2,11 @@ services:
   - type: web
     name: qr-order-service
     env: python
-    buildCommand: |
-      pip install -r requirements.txt
-      apt-get update
-      apt-get install -y libzbar0
+    buildCommand: pip install -r requirements.txt
     startCommand: python main.py
+    envVars:
+      - key: SERVICE_ACCOUNT_JSON
+        sync: false
+
+    nativePackages:
+      - libzbar0
