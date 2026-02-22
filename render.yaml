@@ -1,12 +1,14 @@
 services:
   - type: web
-    name: qr-order-service
+    name: qr-drive-service
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-    envVars:
-      - key: SERVICE_ACCOUNT_JSON
-        sync: false
+    plan: free
+
+    buildCommand: |
+      pip install -r requirements.txt
+
+    startCommand: |
+      python main.py
 
     nativePackages:
       - libzbar0
