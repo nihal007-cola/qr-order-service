@@ -1,6 +1,7 @@
 import time
 import re
 import os
+import json
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
@@ -23,9 +24,13 @@ SCOPES = [
 ]
 
 # ==========================================
+# ✅ LOAD CREDENTIALS FROM RENDER ENV VARIABLE
+# ==========================================
 
-creds = Credentials.from_service_account_file(
-    "service_account.json",
+creds_dict = json.loads(os.environ["SERVICE_ACCOUNT_JSON"])
+
+creds = Credentials.from_service_account_info(
+    creds_dict,
     scopes=SCOPES
 )
 
