@@ -1,7 +1,8 @@
 import time
 import re
 import os
-import json
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
@@ -23,8 +24,8 @@ SCOPES = [
 
 # ==========================================
 
-creds = Credentials.from_service_account_info(
-    json.loads(os.environ["GOOGLE_CREDS"]),
+creds = Credentials.from_service_account_file(
+    "service_account.json",
     scopes=SCOPES
 )
 
@@ -35,18 +36,39 @@ sheet = gc.open_by_key(SPREADSHEET_ID).worksheet(WORKSHEET_NAME)
 
 processed_files = set()
 
+# ================= RENDER DUMMY SERVER =================
+
+def start_dummy_server():
+    port = int(os.environ.get("PORT", 10000))
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    print(f"Dummy server running on port {port}")
+    server.serve_forever()
+
 # ================= HELPERS =================
 
 def extract_design_number(filename):
+    """
+    Example:
+    DES-21748FRC.jpg → 21748
+    """
     match = re.search(r'\d{3,8}', filename)
     return match.group(0) if match else None
 
 
 def already_logged(design):
     records = sheet.get_all_values()
+
     for row in records:
         if len(row) >= 3 and row[2] == design:
             return True
+
     return False
 
 
@@ -106,7 +128,11 @@ def poll_drive():
 
         delete_file(file_id)
 
+# ================= RUN =================
+
 def run():
+
+    Thread(target=start_dummy_server, daemon=True).start()
 
     print("QR Service Started — polling Drive folder:", DRIVE_FOLDER_ID)
 
